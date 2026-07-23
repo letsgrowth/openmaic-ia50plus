@@ -6,6 +6,7 @@ import { runClassroomGenerationJob } from '@/lib/server/classroom-job-runner';
 import { createClassroomGenerationJob } from '@/lib/server/classroom-job-store';
 import { buildRequestOrigin } from '@/lib/server/classroom-storage';
 import { createLogger } from '@/lib/logger';
+import { constrainIa50ClassroomInput } from '@/lib/ia50/mode';
 
 const log = createLogger('GenerateClassroom API');
 
@@ -16,7 +17,7 @@ export async function POST(req: NextRequest) {
   try {
     const rawBody = (await req.json()) as Partial<GenerateClassroomInput>;
     requirementSnippet = rawBody.requirement?.substring(0, 60);
-    const body: GenerateClassroomInput = {
+    const body = constrainIa50ClassroomInput<GenerateClassroomInput>({
       requirement: rawBody.requirement || '',
       ...(rawBody.pdfContent ? { pdfContent: rawBody.pdfContent } : {}),
 
@@ -32,7 +33,7 @@ export async function POST(req: NextRequest) {
         : {}),
       ...(rawBody.enableTTS != null ? { enableTTS: rawBody.enableTTS } : {}),
       ...(rawBody.agentMode ? { agentMode: rawBody.agentMode } : {}),
-    };
+    });
     const { requirement } = body;
 
     if (!requirement) {

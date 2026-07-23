@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { hasValidIa50Bearer } from '@/lib/ia50/internal-auth';
+import { isAllowedIa50ApiPath } from '@/lib/ia50/mode';
 
 /** Convert string to Uint8Array */
 function encode(str: string): Uint8Array {
@@ -42,6 +44,34 @@ async function verifyToken(token: string, accessCode: string): Promise<boolean> 
 }
 
 export async function middleware(request: NextRequest) {
+  if (process.env.IA50_INTERNAL_MODE === 'true') {
+    const { pathname } = request.nextUrl;
+
+    // This endpoint exposes only liveness and capability booleans. It must stay
+    // reachable from container health checks without distributing credentials.
+    if (pathname === '/api/health') {
+      return NextResponse.next();
+    }
+
+    // The controlled fork is an engine, not a second web application. Even a
+    // valid service token cannot open its pages or unrelated upstream APIs.
+    if (!pathname.startsWith('/api/') || !isAllowedIa50ApiPath(pathname)) {
+      return new NextResponse(null, { status: 404 });
+    }
+
+    const expectedToken = process.env.IA50_INTERNAL_TOKEN ?? '';
+    if (hasValidIa50Bearer(request.headers.get('authorization'), expectedToken)) {
+      return NextResponse.next();
+    }
+
+    // Fail closed when the deployment forgot its token. OpenMAIC is not a
+    // second login surface; the IA 50+ platform remains the identity authority.
+    return NextResponse.json(
+      { success: false, errorCode: 'UNAUTHENTICATED', error: 'Platform token required' },
+      { status: expectedToken ? 401 : 503 },
+    );
+  }
+
   const accessCode = process.env.ACCESS_CODE;
   if (!accessCode) {
     return NextResponse.next();

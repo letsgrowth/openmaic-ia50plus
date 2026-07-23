@@ -1,5 +1,5 @@
 # ---- Stage 1: Base ----
-FROM node:22-alpine AS base
+FROM node:22.23.1-alpine3.24 AS base
 
 RUN apk add --no-cache libc6-compat
 RUN corepack enable && corepack prepare pnpm@10.28.0 --activate
@@ -29,7 +29,7 @@ COPY --from=deps /app/public/vendor ./public/vendor
 RUN pnpm build
 
 # ---- Stage 4: Runner ----
-FROM node:22-alpine AS runner
+FROM node:22.23.1-alpine3.24 AS runner
 
 WORKDIR /app
 
@@ -45,9 +45,12 @@ RUN addgroup --system --gid 1001 nodejs && \
 COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+COPY --from=builder --chown=nextjs:nodejs /app/scripts/ia50-entrypoint.sh /app/scripts/ia50-entrypoint.sh
+RUN chmod 0555 /app/scripts/ia50-entrypoint.sh
 
 USER nextjs
 
 EXPOSE 3000
 
+ENTRYPOINT ["/app/scripts/ia50-entrypoint.sh"]
 CMD ["node", "server.js"]

@@ -34,6 +34,11 @@ import { buildVideoManifestFromOutlines } from '@/lib/media/video-manifest';
 import type { UserRequirements } from '@/lib/types/generation';
 import type { Scene, Stage } from '@/lib/types/stage';
 import { AGENT_COLOR_PALETTE, AGENT_DEFAULT_AVATARS } from '@/lib/constants/agent-defaults';
+import {
+  getIa50TeacherAgents,
+  ia50GenerationRetryLimit,
+  isIa50InternalMode,
+} from '@/lib/ia50/mode';
 
 const log = createLogger('Classroom');
 
@@ -363,8 +368,13 @@ export async function generateClassroom(
 
   // Resolve agents based on agentMode — now AFTER outlines so we can use languageDirective
   let agents: AgentInfo[];
-  const agentMode = input.agentMode || 'default';
-  if (agentMode === 'generate') {
+  let agentMode = input.agentMode || 'default';
+  if (isIa50InternalMode()) {
+    agents = getIa50TeacherAgents();
+    // Generated configs embed Clara in each draft so playback does not hydrate
+    // OpenMAIC's six demo agents from browser storage.
+    agentMode = 'generate';
+  } else if (agentMode === 'generate') {
     log.info('Generating custom agent profiles via LLM...');
     try {
       agents = await generateAgentProfiles(requirement, languageDirective, aiCall);
@@ -372,6 +382,7 @@ export async function generateClassroom(
     } catch (e) {
       log.warn('Agent profile generation failed, falling back to defaults:', e);
       agents = getDefaultAgents();
+      agentMode = 'default';
     }
   } else {
     agents = getDefaultAgents();
@@ -412,6 +423,7 @@ export async function generateClassroom(
 
   log.info('Stage 2: Generating scene content and actions...');
   let generatedScenes = 0;
+  const generationRetryLimit = ia50GenerationRetryLimit();
 
   for (const [index, outline] of outlines.entries()) {
     const safeOutline = applyOutlineFallbacks(outline, true, {
@@ -452,6 +464,7 @@ export async function generateClassroom(
         }),
       {
         label: `scene ${index + 1}/${outlines.length} content`,
+        ...(generationRetryLimit === undefined ? {} : { maxRetries: generationRetryLimit }),
         shouldRetryResult: (result) => result === null,
         onRetry: (event) => reportSceneRetry('content', event),
       },
@@ -469,6 +482,7 @@ export async function generateClassroom(
         }),
       {
         label: `scene ${index + 1}/${outlines.length} actions`,
+        ...(generationRetryLimit === undefined ? {} : { maxRetries: generationRetryLimit }),
         onRetry: (event) => reportSceneRetry('actions', event),
       },
     );
