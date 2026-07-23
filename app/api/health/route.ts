@@ -16,6 +16,7 @@ export async function GET() {
     mode: ia50Internal ? 'ia50-internal' : 'standalone',
     capabilities: ia50Internal
       ? {
+          tutorRuntime: true,
           webSearch: false,
           imageGeneration: false,
           videoGeneration: false,

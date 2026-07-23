@@ -7,6 +7,11 @@ import {
   isAllowedIa50ApiPath,
   ia50GenerationRetryLimit,
 } from '@/lib/ia50/mode';
+import {
+  constrainIa50TutorDecision,
+  ia50TutorRequestSchema,
+  type Ia50TutorDecision,
+} from '@/lib/ia50/tutor-contract';
 
 afterEach(() => {
   delete process.env.IA50_INTERNAL_MODE;
@@ -35,6 +40,7 @@ describe('IA 50+ internal mode', () => {
   });
 
   test('exposes only the classroom engine API surface', () => {
+    expect(isAllowedIa50ApiPath('/api/ia50/tutor')).toBe(true);
     expect(isAllowedIa50ApiPath('/api/generate-classroom')).toBe(true);
     expect(isAllowedIa50ApiPath('/api/generate-classroom/job_123')).toBe(true);
     expect(isAllowedIa50ApiPath('/api/classroom')).toBe(true);
@@ -43,6 +49,87 @@ describe('IA 50+ internal mode', () => {
     expect(isAllowedIa50ApiPath('/api/web-search')).toBe(false);
     expect(isAllowedIa50ApiPath('/api/proxy-media')).toBe(false);
     expect(isAllowedIa50ApiPath('/')).toBe(false);
+  });
+
+  test('requires the complete platform identity context for tutor turns', () => {
+    const valid = {
+      platform_context: {
+        user_id: '11111111-1111-4111-8111-111111111111',
+        session_id: '22222222-2222-4222-8222-222222222222',
+        course_id: null,
+        lesson_id: null,
+        subscription_plan: 'Essencial',
+        remaining_credits: 42,
+        accessibility_profile: {
+          font_scale: 1.25,
+          high_contrast: false,
+          reduced_motion: false,
+          simplified_mode: true,
+          reading_speed: 0.9,
+          voice_volume: 0.75,
+          captions_enabled: true,
+          confirm_before_advance: true,
+          playback_mode: 'manual',
+          auto_read_responses: false,
+        },
+      },
+      material: {
+        task: 'Explique inteligência artificial.',
+        context: '',
+        memory_context: '',
+        requested_mode: 'auto',
+        suggested_mode: 'professor',
+      },
+      learner_context: { personalization_enabled: true },
+      approved_content: [],
+    };
+
+    expect(ia50TutorRequestSchema.safeParse(valid).success).toBe(true);
+    expect(
+      ia50TutorRequestSchema.safeParse({
+        ...valid,
+        platform_context: { ...valid.platform_context, session_id: undefined },
+      }).success,
+    ).toBe(false);
+    expect(
+      ia50TutorRequestSchema.safeParse({ ...valid, arbitrary_url: 'https://example.com' }).success,
+    ).toBe(false);
+  });
+
+  test('degrades invented or incomplete content actions to safe text', () => {
+    const decision: Ia50TutorDecision = {
+      message: 'Vamos por partes.',
+      mode: 'professor',
+      title: 'Introdução',
+      summary: 'Uma explicação curta.',
+      steps: [
+        {
+          title: 'Primeiro passo',
+          instruction: 'Leia a explicação.',
+          verification: 'Diga com suas palavras.',
+        },
+      ],
+      cautions: [],
+      questions_to_confirm: [],
+      requires_human_review: false,
+      confidence: 'alta',
+      action: 'show_video',
+      content_id: 'video-inventado',
+      wait_for_completion: true,
+      in_platform_scope: true,
+    };
+
+    expect(constrainIa50TutorDecision(decision, new Set(['video-aprovado']))).toMatchObject({
+      action: 'show_text',
+      content_id: null,
+      wait_for_completion: false,
+    });
+    expect(
+      constrainIa50TutorDecision(
+        { ...decision, content_id: 'video-aprovado' },
+        new Set(['video-aprovado']),
+      ),
+    ).toEqual({ ...decision, content_id: 'video-aprovado' });
   });
 
   test('disables optional heavy or unreviewed generation capabilities', () => {

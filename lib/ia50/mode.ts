@@ -8,6 +8,7 @@ export function isIa50InternalMode(): boolean {
 
 export function isAllowedIa50ApiPath(pathname: string): boolean {
   return (
+    pathname === '/api/ia50/tutor' ||
     pathname === '/api/classroom' ||
     pathname === '/api/generate-classroom' ||
     /^\/api\/generate-classroom\/[A-Za-z0-9_-]{1,80}$/.test(pathname) ||
