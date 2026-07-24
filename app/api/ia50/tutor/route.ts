@@ -8,6 +8,7 @@ import {
   constrainIa50TutorDecision,
   ia50TutorDecisionSchema,
   ia50TutorRequestSchema,
+  recoverIa50TutorDecision,
 } from '@/lib/ia50/tutor-contract';
 import { normalizeUsage } from '@/lib/usage/normalize';
 import { recordUsage } from '@/lib/server/usage-storage';
@@ -140,9 +141,15 @@ export async function POST(request: NextRequest) {
           maxRetries: 1,
           abortSignal: request.signal,
         });
+        const objectOutcome = result.object.then(
+          (decision) => ({ success: true as const, decision }),
+          (error: unknown) => ({ success: false as const, error }),
+        );
 
         let emittedText = '';
+        let lastPartial: unknown = null;
         for await (const partial of result.partialObjectStream) {
+          lastPartial = partial;
           const current =
             typeof partial.message === 'string'
               ? partial.message
@@ -157,11 +164,24 @@ export async function POST(request: NextRequest) {
           if (delta) controller.enqueue(sse('delta', { text: delta }));
         }
 
-        const [rawDecision, usage, response] = await Promise.all([
-          result.object,
+        const [outcome, usage, response] = await Promise.all([
+          objectOutcome,
           result.usage,
           result.response,
         ]);
+        let recoveredFromPartial = false;
+        let rawDecision;
+        if (outcome.success) {
+          rawDecision = outcome.decision;
+        } else {
+          const recovered = recoverIa50TutorDecision(lastPartial, input.material.suggested_mode);
+          if (!recovered) throw outcome.error;
+          rawDecision = recovered;
+          recoveredFromPartial = true;
+          log.warn('Tutor structured response recovered from partial output', {
+            errorName: outcome.error instanceof Error ? outcome.error.name : 'UnknownError',
+          });
+        }
         const decision = constrainIa50TutorDecision(rawDecision, approvedIds);
         const normalized = normalizeUsage(usage);
         const effectiveModel =
@@ -193,6 +213,7 @@ export async function POST(request: NextRequest) {
             model_requested: 'tutor-50plus',
             model_effective: effectiveModel,
             fallback_used: fallbackUsed,
+            recovered_from_partial: recoveredFromPartial,
           }),
         );
         controller.close();

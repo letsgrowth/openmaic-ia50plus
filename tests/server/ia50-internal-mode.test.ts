@@ -14,6 +14,7 @@ import {
   constrainIa50TutorDecision,
   ia50TutorDecisionSchema,
   ia50TutorRequestSchema,
+  recoverIa50TutorDecision,
   type Ia50TutorDecision,
 } from '@/lib/ia50/tutor-contract';
 
@@ -155,6 +156,75 @@ describe('IA 50+ internal mode', () => {
         steps: Array.from({ length: 6 }, () => decision.steps[0]),
       }).success,
     ).toBe(false);
+  });
+
+  test('recovers a truncated structured response as a safe text-only decision', () => {
+    const recovered = recoverIa50TutorDecision(
+      {
+        mode: 'professor',
+        action: 'request_human_help',
+        content_id: 'video-inventado',
+        wait_for_completion: true,
+        in_platform_scope: true,
+        confidence: 'alta',
+        message:
+          '<b>Inteligência artificial</b> ajuda sistemas a reconhecer padrões. ' +
+          'Veja https://example.com/segredo e javascript:alert(1) para continuar.\u0000',
+        title: 'Cinco passos',
+        summary: 'Comece entendendo o objetivo e avance com uma checagem por vez.',
+        steps: [
+          {
+            title: 'Defina o objetivo',
+            instruction: 'Escolha uma tarefa simples para praticar.',
+            verification: 'Explique qual resultado você espera.',
+          },
+          {
+            title: 'Passo incompleto',
+            instruction: 'Compare a resposta com uma fonte confiável.',
+          },
+          { title: 'Sem instrução' },
+        ],
+        cautions: ['Não compartilhe dados pessoais.', 'Confira informações importantes.'],
+        questions_to_confirm: ['Quer praticar agora?'],
+      },
+      'professor',
+    );
+
+    expect(recovered).not.toBeNull();
+    expect(ia50TutorDecisionSchema.safeParse(recovered).success).toBe(true);
+    expect(recovered).toMatchObject({
+      mode: 'professor',
+      action: 'show_text',
+      content_id: null,
+      wait_for_completion: false,
+      confidence: 'alta',
+    });
+    expect(recovered?.message).not.toContain('<b>');
+    expect(recovered?.message).not.toContain('https://');
+    expect(recovered?.message).not.toContain('javascript:');
+    expect(recovered?.steps).toHaveLength(2);
+    expect(recovered?.steps[1]?.verification).toBe('Diga com suas palavras o que entendeu.');
+  });
+
+  test('recovers message-only output and rejects unusable partials', () => {
+    const recovered = recoverIa50TutorDecision(
+      { message: 'Uma explicação útil que chegou antes do limite.' },
+      'copiloto',
+    );
+
+    expect(recovered).toMatchObject({
+      mode: 'copiloto',
+      action: 'show_text',
+      title: 'Vamos aprender juntos',
+      steps: [
+        {
+          title: 'Confira a explicação',
+          verification: 'Diga com suas palavras o que entendeu.',
+        },
+      ],
+    });
+    expect(recoverIa50TutorDecision({ message: '   ' }, 'professor')).toBeNull();
+    expect(recoverIa50TutorDecision(null, 'professor')).toBeNull();
   });
 
   test('keeps spend-bearing content capabilities closed unless server gates enable them', () => {

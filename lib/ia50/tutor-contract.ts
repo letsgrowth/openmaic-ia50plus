@@ -77,8 +77,17 @@ export const ia50TutorRequestSchema = z
 
 export const ia50TutorDecisionSchema = z
   .object({
-    message: z.string().min(1).max(600),
     mode: z.enum(['professor', 'copiloto', 'guardiao', 'avaliador']),
+    action: tutorActionSchema,
+    content_id: z
+      .string()
+      .regex(/^[a-z0-9][a-z0-9._:-]{0,159}$/)
+      .nullable(),
+    wait_for_completion: z.boolean(),
+    in_platform_scope: z.boolean(),
+    requires_human_review: z.boolean(),
+    confidence: z.enum(['baixa', 'média', 'alta']),
+    message: z.string().min(1).max(600),
     title: z.string().min(1).max(80),
     summary: z.string().min(1).max(200),
     steps: z
@@ -95,20 +104,114 @@ export const ia50TutorDecisionSchema = z
       .max(5),
     cautions: z.array(z.string().min(1).max(140)).max(2),
     questions_to_confirm: z.array(z.string().min(1).max(140)).max(2),
-    requires_human_review: z.boolean(),
-    confidence: z.enum(['baixa', 'média', 'alta']),
-    action: tutorActionSchema,
-    content_id: z
-      .string()
-      .regex(/^[a-z0-9][a-z0-9._:-]{0,159}$/)
-      .nullable(),
-    wait_for_completion: z.boolean(),
-    in_platform_scope: z.boolean(),
   })
   .strict();
 
 export type Ia50TutorRequest = z.infer<typeof ia50TutorRequestSchema>;
 export type Ia50TutorDecision = z.infer<typeof ia50TutorDecisionSchema>;
+
+type TutorMode = Ia50TutorDecision['mode'];
+
+const TUTOR_MODES = new Set<TutorMode>(['professor', 'copiloto', 'guardiao', 'avaliador']);
+const TUTOR_CONFIDENCE = new Set<Ia50TutorDecision['confidence']>(['baixa', 'média', 'alta']);
+const CONTROL_CHARACTERS = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g;
+const HTML_TAG = /<\/?[a-z][^>]*>/giu;
+const URL = /\b(?:https?:\/\/|ftp:\/\/|www\.|javascript:|data:|file:)\S+/giu;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function boundedTutorText(value: unknown, maxLength: number): string | null {
+  if (typeof value !== 'string') return null;
+  const cleaned = value
+    .replace(CONTROL_CHARACTERS, '')
+    .replace(HTML_TAG, '')
+    .replace(URL, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!cleaned) return null;
+  if (cleaned.length <= maxLength) return cleaned;
+  const sliced = cleaned.slice(0, maxLength);
+  const atWordBoundary = sliced.replace(/\s+\S*$/u, '').trim();
+  return atWordBoundary || sliced.trim();
+}
+
+function boundedTutorList(value: unknown, maxItems: number): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => boundedTutorText(item, 140))
+    .filter((item): item is string => item !== null)
+    .slice(0, maxItems);
+}
+
+/**
+ * Turns a meaningful partial model object into a schema-valid, text-only
+ * decision. This is a fail-safe for providers that stream useful text but hit
+ * their output cap before closing the JSON object. Recovered output can never
+ * trigger media, ticket, progress or lesson-completion side effects.
+ */
+export function recoverIa50TutorDecision(
+  partial: unknown,
+  suggestedMode: TutorMode,
+): Ia50TutorDecision | null {
+  if (!isRecord(partial)) return null;
+  const message = boundedTutorText(partial.message, 600) ?? boundedTutorText(partial.summary, 200);
+  if (!message) return null;
+
+  const rawSteps = Array.isArray(partial.steps) ? partial.steps : [];
+  const steps = rawSteps
+    .map((rawStep, index) => {
+      if (!isRecord(rawStep)) return null;
+      const instruction = boundedTutorText(rawStep.instruction, 140);
+      if (!instruction) return null;
+      return {
+        title: boundedTutorText(rawStep.title, 50) ?? `Passo ${index + 1}`,
+        instruction,
+        verification:
+          boundedTutorText(rawStep.verification, 100) ?? 'Diga com suas palavras o que entendeu.',
+      };
+    })
+    .filter((step): step is NonNullable<typeof step> => step !== null)
+    .slice(0, 5);
+
+  if (steps.length === 0) {
+    steps.push({
+      title: 'Confira a explicação',
+      instruction: boundedTutorText(message, 140) ?? message.slice(0, 140),
+      verification: 'Diga com suas palavras o que entendeu.',
+    });
+  }
+
+  const mode =
+    typeof partial.mode === 'string' && TUTOR_MODES.has(partial.mode as TutorMode)
+      ? (partial.mode as TutorMode)
+      : suggestedMode;
+  const confidence =
+    typeof partial.confidence === 'string' &&
+    TUTOR_CONFIDENCE.has(partial.confidence as Ia50TutorDecision['confidence'])
+      ? (partial.confidence as Ia50TutorDecision['confidence'])
+      : 'baixa';
+  const candidate: Ia50TutorDecision = {
+    mode,
+    action: 'show_text',
+    content_id: null,
+    wait_for_completion: false,
+    in_platform_scope:
+      typeof partial.in_platform_scope === 'boolean' ? partial.in_platform_scope : true,
+    requires_human_review:
+      typeof partial.requires_human_review === 'boolean' ? partial.requires_human_review : false,
+    confidence,
+    message,
+    title: boundedTutorText(partial.title, 80) ?? 'Vamos aprender juntos',
+    summary: boundedTutorText(partial.summary, 200) ?? boundedTutorText(message, 200) ?? message,
+    steps,
+    cautions: boundedTutorList(partial.cautions, 2),
+    questions_to_confirm: boundedTutorList(partial.questions_to_confirm, 2),
+  };
+  const parsed = ia50TutorDecisionSchema.safeParse(candidate);
+  return parsed.success ? parsed.data : null;
+}
 
 const CONTENT_ACTIONS = new Set<(typeof IA50_TUTOR_ACTIONS)[number]>([
   'show_video',
