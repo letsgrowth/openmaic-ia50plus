@@ -109,7 +109,9 @@ export async function POST(request: NextRequest) {
   }
 
   const input = parsed.data;
-  const approvedIds = new Set(input.approved_content.map((item) => item.content_id));
+  const approvedContentById = new Map(
+    input.approved_content.map((item) => [item.content_id, item]),
+  );
   const prompt = JSON.stringify(
     {
       instruction:
@@ -182,7 +184,7 @@ export async function POST(request: NextRequest) {
             errorName: outcome.error instanceof Error ? outcome.error.name : 'UnknownError',
           });
         }
-        const decision = constrainIa50TutorDecision(rawDecision, approvedIds);
+        const decision = constrainIa50TutorDecision(rawDecision, approvedContentById);
         const normalized = normalizeUsage(usage);
         const effectiveModel =
           typeof response.modelId === 'string' && response.modelId

@@ -213,22 +213,35 @@ export function recoverIa50TutorDecision(
   return parsed.success ? parsed.data : null;
 }
 
-const CONTENT_ACTIONS = new Set<(typeof IA50_TUTOR_ACTIONS)[number]>([
-  'show_video',
-  'show_image',
-  'show_quiz',
-]);
+type ApprovedTutorContent = {
+  content_type: string;
+  media_kind?: 'image' | 'video';
+};
+
+function contentActionMatches(
+  action: Ia50TutorDecision['action'],
+  content: ApprovedTutorContent | undefined,
+): boolean {
+  if (action === 'show_video') return content?.media_kind === 'video';
+  if (action === 'show_image') return content?.media_kind === 'image';
+  if (action === 'show_quiz') return content?.content_type === 'quiz';
+  return true;
+}
 
 /**
  * The model may only select an identifier that the platform included in the
- * approved catalog. Invalid references degrade to text instead of becoming a
- * URL, iframe or unreviewed action.
+ * approved catalog, and media/quiz actions must match that catalog entry's
+ * declared kind. Invalid or mismatched references degrade to safe text instead
+ * of becoming a URL, iframe or unreviewed action.
  */
 export function constrainIa50TutorDecision(
   decision: Ia50TutorDecision,
-  approvedContentIds: ReadonlySet<string>,
+  approvedContentById: ReadonlyMap<string, ApprovedTutorContent>,
 ): Ia50TutorDecision {
-  if (decision.content_id && !approvedContentIds.has(decision.content_id)) {
+  const approvedContent = decision.content_id
+    ? approvedContentById.get(decision.content_id)
+    : undefined;
+  if (decision.content_id && !approvedContent) {
     return {
       ...decision,
       action: 'show_text',
@@ -236,10 +249,11 @@ export function constrainIa50TutorDecision(
       wait_for_completion: false,
     };
   }
-  if (CONTENT_ACTIONS.has(decision.action) && !decision.content_id) {
+  if (!contentActionMatches(decision.action, approvedContent)) {
     return {
       ...decision,
       action: 'show_text',
+      content_id: null,
       wait_for_completion: false,
     };
   }

@@ -133,17 +133,60 @@ describe('IA 50+ internal mode', () => {
       in_platform_scope: true,
     };
 
-    expect(constrainIa50TutorDecision(decision, new Set(['video-aprovado']))).toMatchObject({
+    const approvedContent = new Map([
+      [
+        'video-aprovado',
+        {
+          content_type: 'demonstration',
+          media_kind: 'video' as const,
+        },
+      ],
+      [
+        'imagem-aprovada',
+        {
+          content_type: 'demonstration',
+          media_kind: 'image' as const,
+        },
+      ],
+      ['quiz-aprovado', { content_type: 'quiz' }],
+    ]);
+
+    expect(constrainIa50TutorDecision(decision, approvedContent)).toMatchObject({
+      action: 'show_text',
+      content_id: null,
+      wait_for_completion: false,
+    });
+    expect(
+      constrainIa50TutorDecision({ ...decision, content_id: 'video-aprovado' }, approvedContent),
+    ).toEqual({ ...decision, content_id: 'video-aprovado' });
+    expect(
+      constrainIa50TutorDecision(
+        {
+          ...decision,
+          action: 'show_video',
+          content_id: 'imagem-aprovada',
+        },
+        approvedContent,
+      ),
+    ).toMatchObject({
       action: 'show_text',
       content_id: null,
       wait_for_completion: false,
     });
     expect(
       constrainIa50TutorDecision(
-        { ...decision, content_id: 'video-aprovado' },
-        new Set(['video-aprovado']),
+        {
+          ...decision,
+          action: 'show_quiz',
+          content_id: 'quiz-aprovado',
+        },
+        approvedContent,
       ),
-    ).toEqual({ ...decision, content_id: 'video-aprovado' });
+    ).toMatchObject({
+      action: 'show_quiz',
+      content_id: 'quiz-aprovado',
+      wait_for_completion: true,
+    });
     expect(
       ia50TutorDecisionSchema.safeParse({
         ...decision,
