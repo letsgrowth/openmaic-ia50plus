@@ -10,7 +10,9 @@ import {
 } from '@/lib/ia50/mode';
 import {
   IA50_TUTOR_MAX_OUTPUT_TOKENS,
+  IA50_TUTOR_MAX_TOTAL_WORDS,
   constrainIa50TutorDecision,
+  ia50TutorDecisionSchema,
   ia50TutorRequestSchema,
   type Ia50TutorDecision,
 } from '@/lib/ia50/tutor-contract';
@@ -26,6 +28,7 @@ afterEach(() => {
 describe('IA 50+ internal mode', () => {
   test('keeps enough output budget for the complete structured tutor contract', () => {
     expect(IA50_TUTOR_MAX_OUTPUT_TOKENS).toBe(1024);
+    expect(IA50_TUTOR_MAX_TOTAL_WORDS).toBe(250);
   });
 
   test('accepts only the exact platform bearer token', () => {
@@ -140,6 +143,18 @@ describe('IA 50+ internal mode', () => {
         new Set(['video-aprovado']),
       ),
     ).toEqual({ ...decision, content_id: 'video-aprovado' });
+    expect(
+      ia50TutorDecisionSchema.safeParse({
+        ...decision,
+        message: 'x'.repeat(601),
+      }).success,
+    ).toBe(false);
+    expect(
+      ia50TutorDecisionSchema.safeParse({
+        ...decision,
+        steps: Array.from({ length: 6 }, () => decision.steps[0]),
+      }).success,
+    ).toBe(false);
   });
 
   test('keeps spend-bearing content capabilities closed unless server gates enable them', () => {

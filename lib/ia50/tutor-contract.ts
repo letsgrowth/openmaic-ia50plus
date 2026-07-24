@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 export const IA50_TUTOR_MAX_OUTPUT_TOKENS = 1024;
+export const IA50_TUTOR_MAX_TOTAL_WORDS = 250;
 
 export const IA50_TUTOR_ACTIONS = [
   'show_text',
@@ -76,24 +77,24 @@ export const ia50TutorRequestSchema = z
 
 export const ia50TutorDecisionSchema = z
   .object({
-    message: z.string().min(1).max(1_600),
+    message: z.string().min(1).max(600),
     mode: z.enum(['professor', 'copiloto', 'guardiao', 'avaliador']),
-    title: z.string().min(1).max(160),
-    summary: z.string().min(1).max(900),
+    title: z.string().min(1).max(80),
+    summary: z.string().min(1).max(200),
     steps: z
       .array(
         z
           .object({
-            title: z.string().min(1).max(120),
-            instruction: z.string().min(1).max(500),
-            verification: z.string().min(1).max(300),
+            title: z.string().min(1).max(50),
+            instruction: z.string().min(1).max(140),
+            verification: z.string().min(1).max(100),
           })
           .strict(),
       )
       .min(1)
-      .max(6),
-    cautions: z.array(z.string().min(1).max(400)).max(4),
-    questions_to_confirm: z.array(z.string().min(1).max(300)).max(3),
+      .max(5),
+    cautions: z.array(z.string().min(1).max(140)).max(2),
+    questions_to_confirm: z.array(z.string().min(1).max(140)).max(2),
     requires_human_review: z.boolean(),
     confidence: z.enum(['baixa', 'média', 'alta']),
     action: tutorActionSchema,
