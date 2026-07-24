@@ -3,6 +3,7 @@ import { afterEach, describe, expect, test } from 'vitest';
 import { hasValidIa50Bearer } from '@/lib/ia50/internal-auth';
 import {
   constrainIa50ClassroomInput,
+  getIa50ContentFeatureGates,
   getIa50TeacherAgents,
   isAllowedIa50ApiPath,
   ia50GenerationRetryLimit,
@@ -15,6 +16,10 @@ import {
 
 afterEach(() => {
   delete process.env.IA50_INTERNAL_MODE;
+  delete process.env.IA50_CONTENT_WEB_SEARCH;
+  delete process.env.IA50_CONTENT_IMAGE_GENERATION;
+  delete process.env.IA50_CONTENT_VIDEO_GENERATION;
+  delete process.env.IA50_CONTENT_TTS;
 });
 
 describe('IA 50+ internal mode', () => {
@@ -132,7 +137,7 @@ describe('IA 50+ internal mode', () => {
     ).toEqual({ ...decision, content_id: 'video-aprovado' });
   });
 
-  test('disables optional heavy or unreviewed generation capabilities', () => {
+  test('keeps spend-bearing content capabilities closed unless server gates enable them', () => {
     process.env.IA50_INTERNAL_MODE = 'true';
 
     expect(
@@ -148,8 +153,42 @@ describe('IA 50+ internal mode', () => {
       enableImageGeneration: false,
       enableVideoGeneration: false,
       enableTTS: false,
-      agentMode: 'default',
+      agentMode: 'generate',
     });
     expect(ia50GenerationRetryLimit()).toBe(1);
+  });
+
+  test('allows only server-gated content capabilities and strips client provider credentials', () => {
+    process.env.IA50_INTERNAL_MODE = 'true';
+    process.env.IA50_CONTENT_WEB_SEARCH = 'true';
+    process.env.IA50_CONTENT_IMAGE_GENERATION = '1';
+    process.env.IA50_CONTENT_VIDEO_GENERATION = 'on';
+
+    expect(getIa50ContentFeatureGates()).toEqual({
+      webSearch: true,
+      imageGeneration: true,
+      videoGeneration: true,
+      tts: false,
+    });
+    expect(
+      constrainIa50ClassroomInput({
+        requirement: 'Ensine a usar IA com segurança',
+        enableWebSearch: true,
+        webSearchProviderId: 'tavily',
+        webSearchApiKey: 'client-supplied-key-must-not-be-used',
+        baiduSubSources: { webSearch: true, baike: true, scholar: true },
+        enableImageGeneration: true,
+        enableVideoGeneration: true,
+        enableTTS: true,
+        agentMode: 'default',
+      }),
+    ).toEqual({
+      requirement: 'Ensine a usar IA com segurança',
+      enableWebSearch: true,
+      enableImageGeneration: true,
+      enableVideoGeneration: true,
+      enableTTS: false,
+      agentMode: 'generate',
+    });
   });
 });

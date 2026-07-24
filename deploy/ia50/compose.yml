@@ -17,11 +17,16 @@ services:
       PORT: "3000"
       IA50_INTERNAL_MODE: "true"
       IA50_SINGLE_TEACHER_MODE: "true"
+      IA50_CONTENT_WEB_SEARCH: "${IA50_CONTENT_WEB_SEARCH:-true}"
+      IA50_CONTENT_IMAGE_GENERATION: "${IA50_CONTENT_IMAGE_GENERATION:-false}"
+      IA50_CONTENT_VIDEO_GENERATION: "${IA50_CONTENT_VIDEO_GENERATION:-false}"
+      IA50_CONTENT_TTS: "${IA50_CONTENT_TTS:-false}"
       IA50_INTERNAL_TOKEN_FILE: /run/secrets/openmaic_internal_token
       OPENAI_API_KEY_FILE: /run/secrets/openmaic_litellm_api_key
       OPENAI_BASE_URL: http://litellm:4000/v1
       OPENAI_MODELS: tutor-50plus
       DEFAULT_MODEL: openai:tutor-50plus
+      SEARXNG_BASE_URL: http://searxng:8080
       LLM_THINKING_DISABLED: "true"
       NEXT_PUBLIC_PI_CHAT_ENABLED: "false"
       TTS_BROWSER_NATIVE_ENABLED: "false"
@@ -56,11 +61,15 @@ services:
     stop_grace_period: 30s
     networks:
       - ia50_platform
+      - ia50_search
       - litellm_gateway
 
 networks:
   ia50_platform:
     name: ia50_private
+    external: true
+  ia50_search:
+    name: ia50_search_private
     external: true
   litellm_gateway:
     name: litellm_litellm_internal

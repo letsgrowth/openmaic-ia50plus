@@ -23,6 +23,7 @@ import { resolveVocationalActive } from '@/lib/config/feature-flags';
 import { buildSearchQuery } from '@/lib/server/search-query-builder';
 import { formatSearchResultsAsContext, searchWeb } from '@/lib/web-search';
 import type { BaiduSubSources, WebSearchProviderId } from '@/lib/web-search/types';
+import type { WebSearchSource } from '@/lib/types/web-search';
 import { persistClassroom } from '@/lib/server/classroom-storage';
 import {
   generateMediaForClassroom,
@@ -79,7 +80,43 @@ export interface GenerateClassroomResult {
   stage: Stage;
   scenes: Scene[];
   scenesCount: number;
+  researchSources: ClassroomResearchSource[];
   createdAt: string;
+}
+
+export interface ClassroomResearchSource {
+  title: string;
+  url: string;
+  excerpt: string;
+  score: number;
+}
+
+function boundedResearchSources(sources: WebSearchSource[]): ClassroomResearchSource[] {
+  const seen = new Set<string>();
+  const bounded: ClassroomResearchSource[] = [];
+  for (const source of sources) {
+    if (bounded.length >= 8) break;
+    let normalizedUrl: string;
+    try {
+      const parsed = new URL(source.url);
+      if (!['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password) {
+        continue;
+      }
+      parsed.hash = '';
+      normalizedUrl = parsed.toString();
+    } catch {
+      continue;
+    }
+    if (seen.has(normalizedUrl)) continue;
+    seen.add(normalizedUrl);
+    bounded.push({
+      title: (source.title.trim() || normalizedUrl).slice(0, 240),
+      url: normalizedUrl,
+      excerpt: source.content.trim().slice(0, 1_000),
+      score: Number.isFinite(source.score) ? source.score : 0,
+    });
+  }
+  return bounded;
 }
 
 function createInMemoryStore(stage: Stage): StageStore {
@@ -278,6 +315,7 @@ export async function generateClassroom(
 
   // Web search (optional, graceful degradation)
   let researchContext: string | undefined;
+  let researchSources: ClassroomResearchSource[] = [];
   if (input.enableWebSearch) {
     const webSearchConfig = resolveClassroomWebSearchConfig(input);
     if (webSearchConfig) {
@@ -317,6 +355,7 @@ export async function generateClassroom(
           baiduSubSources: webSearchConfig.baiduSubSources,
         });
         researchContext = formatSearchResultsAsContext(searchResult);
+        researchSources = boundedResearchSources(searchResult.sources);
         if (researchContext) {
           log.info(`Web search returned ${searchResult.sources.length} sources`);
         }
@@ -582,6 +621,7 @@ export async function generateClassroom(
     stage,
     scenes,
     scenesCount: scenes.length,
+    researchSources,
     createdAt: persisted.createdAt,
   };
 }

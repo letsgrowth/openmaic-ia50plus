@@ -51,6 +51,7 @@ const approvedContentSchema = z
     content_type: z.string().min(1).max(80),
     lesson_title: z.string().min(1).max(240),
     block_order: z.number().int().min(0).max(100),
+    media_kind: z.enum(['image', 'video']).optional(),
   })
   .strict();
 

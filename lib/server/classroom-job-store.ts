@@ -36,6 +36,7 @@ export interface ClassroomGenerationJob {
     classroomId: string;
     url: string;
     scenesCount: number;
+    researchSources: GenerateClassroomResult['researchSources'];
   };
   error?: string;
 }
@@ -206,6 +207,7 @@ export async function markClassroomGenerationJobSucceeded(
       classroomId: result.id,
       url: result.url,
       scenesCount: result.scenesCount,
+      researchSources: result.researchSources,
     },
   });
 }
