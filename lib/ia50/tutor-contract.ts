@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+export const IA50_TUTOR_MAX_OUTPUT_TOKENS = 1024;
+
 export const IA50_TUTOR_ACTIONS = [
   'show_text',
   'show_video',

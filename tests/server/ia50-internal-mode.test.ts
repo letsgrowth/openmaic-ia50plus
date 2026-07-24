@@ -9,6 +9,7 @@ import {
   ia50GenerationRetryLimit,
 } from '@/lib/ia50/mode';
 import {
+  IA50_TUTOR_MAX_OUTPUT_TOKENS,
   constrainIa50TutorDecision,
   ia50TutorRequestSchema,
   type Ia50TutorDecision,
@@ -23,6 +24,10 @@ afterEach(() => {
 });
 
 describe('IA 50+ internal mode', () => {
+  test('keeps enough output budget for the complete structured tutor contract', () => {
+    expect(IA50_TUTOR_MAX_OUTPUT_TOKENS).toBe(1024);
+  });
+
   test('accepts only the exact platform bearer token', () => {
     const token = 'ia50-internal-secret-with-32-chars-minimum';
     expect(hasValidIa50Bearer(`Bearer ${token}`, token)).toBe(true);

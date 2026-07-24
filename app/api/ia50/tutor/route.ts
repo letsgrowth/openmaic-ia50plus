@@ -3,6 +3,7 @@ import type { NextRequest } from 'next/server';
 
 import { createLogger } from '@/lib/logger';
 import {
+  IA50_TUTOR_MAX_OUTPUT_TOKENS,
   constrainIa50TutorDecision,
   ia50TutorDecisionSchema,
   ia50TutorRequestSchema,
@@ -130,7 +131,7 @@ export async function POST(request: NextRequest) {
           system: SYSTEM_PROMPT,
           prompt,
           temperature: 0.3,
-          maxOutputTokens: 600,
+          maxOutputTokens: IA50_TUTOR_MAX_OUTPUT_TOKENS,
           maxRetries: 1,
           abortSignal: request.signal,
         });
