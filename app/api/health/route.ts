@@ -16,6 +16,11 @@ export async function GET() {
   const hasImageGeneration = Object.keys(getServerImageProviders()).length > 0;
   const hasVideoGeneration = Object.keys(getServerVideoProviders()).length > 0;
   const hasTts = Object.values(getServerTTSProviders()).some((info) => !info.disabled);
+  const hasIa50Tts =
+    ia50Internal &&
+    Boolean(process.env.OPENAI_API_KEY) &&
+    Boolean(process.env.OPENAI_BASE_URL) &&
+    (process.env.IA50_TTS_MODEL ?? 'clara-ptbr-tts') === 'clara-ptbr-tts';
   return apiSuccess({
     status: 'ok',
     version,
@@ -26,7 +31,7 @@ export async function GET() {
           webSearch: gates.webSearch && hasWebSearch,
           imageGeneration: gates.imageGeneration && hasImageGeneration,
           videoGeneration: gates.videoGeneration && hasVideoGeneration,
-          tts: gates.tts && hasTts,
+          tts: gates.tts && (hasTts || hasIa50Tts),
         }
       : {
           webSearch: hasWebSearch,

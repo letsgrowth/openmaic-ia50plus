@@ -55,6 +55,7 @@ describe('IA 50+ internal mode', () => {
 
   test('exposes only the classroom engine API surface', () => {
     expect(isAllowedIa50ApiPath('/api/ia50/tutor')).toBe(true);
+    expect(isAllowedIa50ApiPath('/api/ia50/tts')).toBe(true);
     expect(isAllowedIa50ApiPath('/api/generate-classroom')).toBe(true);
     expect(isAllowedIa50ApiPath('/api/generate-classroom/job_123')).toBe(true);
     expect(isAllowedIa50ApiPath('/api/classroom')).toBe(true);

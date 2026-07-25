@@ -109,6 +109,7 @@ import {
 export interface TTSGenerationResult {
   audio: Uint8Array;
   format: string;
+  generationId?: string;
 }
 
 /**
@@ -213,6 +214,7 @@ async function generateOpenAITTS(
       input: text,
       voice: config.voice,
       speed: config.speed || 1.0,
+      response_format: config.format || 'mp3',
     }),
   });
 
@@ -228,6 +230,7 @@ async function generateOpenAITTS(
   return {
     audio: new Uint8Array(arrayBuffer),
     format,
+    generationId: response.headers.get('x-generation-id') || undefined,
   };
 }
 

@@ -14,16 +14,20 @@ ser preservados em toda distribuição.
 - `IA50_INTERNAL_MODE=true` exige um bearer token dedicado e falha fechado se
   o segredo estiver ausente ou tiver menos de 32 caracteres. Não existe
   cadastro paralelo no OpenMAIC.
-- Mesmo com bearer válido, somente saúde, geração, persistência e mídia de
-  salas são alcançáveis. Páginas e APIs upstream de busca, chat, proxy, imagem,
-  vídeo, TTS, exportação ou configuração retornam `404`.
+- Mesmo com bearer válido, somente saúde, geração, persistência, mídia de
+  salas e o endpoint dedicado `POST /api/ia50/tts` são alcançáveis. Páginas e
+  APIs upstream de busca, chat, proxy, imagem, vídeo, TTS genérico, exportação
+  ou configuração retornam `404`.
 - A sala tem somente Clara como professora, sem colegas de IA permanentes.
 - A geração editorial pode usar busca web, imagem, vídeo e TTS somente quando
   cada capacidade estiver habilitada por uma variável `IA50_CONTENT_*` no
   servidor e houver provedor também configurado no servidor. O corpo da
   requisição nunca escolhe provedor nem fornece chave. A busca usa o SearXNG
-  privado da plataforma; imagem, vídeo e TTS permanecem desligados até que o
-  operador configure provedor, limite de gasto e monitoramento.
+  privado da plataforma; imagem e vídeo permanecem desligados até que o
+  operador configure provedor, limite de gasto e monitoramento. O TTS da Clara
+  usa exclusivamente o alias interno `clara-ptbr-tts`, voz `pf_dora`, MP3 e
+  velocidade entre `0.75` e `1.25`; qualquer modelo, voz ou campo adicional
+  falha fechado.
 - Rascunhos de aula são gerados na área administrativa, revisados por pessoa
   autorizada e importados pela plataforma com fontes e proveniência. Nenhuma
   geração publica conteúdo automaticamente. A experiência do aluno usa apenas
@@ -50,6 +54,14 @@ em `/api/health` e só então mude o respectivo gate:
 - `IA50_CONTENT_IMAGE_GENERATION`;
 - `IA50_CONTENT_VIDEO_GENERATION`;
 - `IA50_CONTENT_TTS`.
+
+Para o TTS, o gateway OpenAI-compatible deve ser exclusivamente o LiteLLM
+privado, `IA50_TTS_MODEL=clara-ptbr-tts` deve permanecer fixo e o alias deve
+resolver para o modelo aprovado pelo operador. A rota limita texto a 1.600
+caracteres, requisição a 8 KiB e resposta a 8 MiB, não armazena o áudio e
+registra o consumo por caractere. O Compose mantém
+`IA50_CONTENT_TTS=false` por padrão; a ativação é uma decisão externa de
+deploy, com orçamento e monitoramento configurados.
 
 ## Atualizações do upstream
 

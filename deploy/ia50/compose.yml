@@ -26,6 +26,7 @@ services:
       OPENAI_BASE_URL: http://litellm:4000/v1
       OPENAI_MODELS: tutor-50plus
       DEFAULT_MODEL: openai:tutor-50plus
+      IA50_TTS_MODEL: clara-ptbr-tts
       SEARXNG_BASE_URL: http://searxng:8080
       LLM_THINKING_DISABLED: "true"
       NEXT_PUBLIC_PI_CHAT_ENABLED: "false"
